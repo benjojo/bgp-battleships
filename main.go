@@ -9,7 +9,8 @@ func main() {
 	flag.Parse()
 	log.Printf("yup")
 
-	N := battleShipBoard{}
+	LocalB := battleShipBoard{}
+	RemoteB := battleShipBoard{}
 
 	N.Board[1][5] = stateShip
 	N.Board[1][2] = stateHit
