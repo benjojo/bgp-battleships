@@ -61,7 +61,7 @@ func main() {
 			}
 			fmt.Print("!")
 
-			if tempgameCounter > gameCounter {
+			if tempgameCounter > gameCounter || gameCounter == 0 {
 				gameCounter = tempgameCounter + 1
 				// !! New move has happened
 
@@ -74,13 +74,15 @@ func main() {
 					log.Printf("It's a Miss!")
 				}
 
-				// Now... did we get hit?
-				if LocalB.Board[ny][nx] == stateShip {
-					hitmiss = 1
-					LocalB.Board[ny][nx] = stateHit
-				} else {
-					hitmiss = 0
-					LocalB.Board[ny][nx] = stateAttempt
+				if !(tempgameCounter == 1 && *startfirst) {
+					// Now... did we get hit?
+					if LocalB.Board[ny][nx] == stateShip {
+						hitmiss = 1
+						LocalB.Board[ny][nx] = stateHit
+					} else {
+						hitmiss = 0
+						LocalB.Board[ny][nx] = stateAttempt
+					}
 				}
 				break
 			}

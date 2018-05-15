@@ -121,7 +121,7 @@ func writeBGP(gameIncrementor, X, Y, HitOrMissOnLast int) error {
 	counternumberbytes := make([]byte, 2)
 	counternumberbits := iobit.NewWriter(counternumberbytes)
 
-	counternumberbits.PutUint16(2, 0x1)
+	counternumberbits.PutUint16(2, 1)
 	counternumberbits.PutUint16(14, uint16(gameIncrementor))
 	counternumberbits.Flush()
 
@@ -130,7 +130,7 @@ func writeBGP(gameIncrementor, X, Y, HitOrMissOnLast int) error {
 	positionnumberbytes := make([]byte, 2)
 	positionnumberbits := iobit.NewWriter(positionnumberbytes)
 
-	positionnumberbits.PutUint16(2, 0x2)
+	positionnumberbits.PutUint16(2, 2)
 	positionnumberbits.PutUint16(4, uint16(X))
 	positionnumberbits.PutUint16(4, uint16(Y))
 	positionnumberbits.PutBit(HitOrMissOnLast == 1)
@@ -180,12 +180,14 @@ func readCommunities(prefix string) (o []bgpCommunity) {
 	if err != nil {
 		log.Fatalf("Unable to connect to bird %s", err.Error())
 	}
+	buffer := make([]byte, 90000)
+	conn.Read(buffer)
 
 	defer conn.Close()
 
 	conn.Write([]byte(fmt.Sprintf("show route all %s\n", prefix)))
 
-	buffer := make([]byte, 90000)
+	buffer = make([]byte, 90000)
 	n, err := conn.Read(buffer)
 
 	if err != nil {
@@ -209,6 +211,7 @@ func readCommunities(prefix string) (o []bgpCommunity) {
 		}
 	}
 
+	// log.Print(string(buffer))
 	// log.Printf("%+v", matches)
 	return o
 }
