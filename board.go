@@ -1,7 +1,11 @@
 package main
 
 import (
+	cr "crypto/rand"
 	"fmt"
+	"math"
+	"math/big"
+	"math/rand"
 	"strconv"
 	"strings"
 
@@ -23,16 +27,18 @@ type battleShipBoard struct {
 	Board [10][10]boardState
 }
 
-func (b *battleShipBoard) Draw() {
-	fmt.Print("_|A|B|C|D|E|F|G|H|I|J|_\n")
+func (b *battleShipBoard) Draw() string {
+	str := ""
+	str += fmt.Sprint("_|A|B|C|D|E|F|G|H|I|J|_\n")
 	for y, stripe := range b.Board {
-		fmt.Printf("%d|", y)
+		str += fmt.Sprintf("%d|", y)
 		for _, x := range stripe {
-			fmt.Printf("%s|", x.Draw())
+			str += fmt.Sprintf("%s|", x.Draw())
 		}
-		fmt.Printf("%d\n", y)
+		str += fmt.Sprintf("%d\n", y)
 	}
-	fmt.Print("_|A|B|C|D|E|F|G|H|I|J|_\n")
+	str += fmt.Sprint("_|A|B|C|D|E|F|G|H|I|J|_\n")
+	return str
 }
 
 var cblack = ansi.ColorCode("black+h:black")
@@ -75,4 +81,73 @@ func cordsToNumbers(in string) (X, Y int) {
 		return X, int(i2)
 	}
 	return -1, -1
+}
+
+func combineBoard(b1, b2 battleShipBoard) string {
+	b1r, b2r := b1.Draw(), b2.Draw()
+
+	b1rs, b2rs := strings.Split(b1r, "\n"), strings.Split(b2r, "\n")
+
+	str := ""
+	for k, _ := range b1rs {
+		str += fmt.Sprintf("%s     %s\n", b1rs[k], b2rs[k])
+	}
+
+	return str
+}
+
+func makeBoard() battleShipBoard {
+	a := battleShipBoard{}
+	ri, _ := cr.Int(cr.Reader, big.NewInt(math.MaxInt64))
+	rand.Seed(ri.Int64())
+
+	a = placeShip(5, a)
+	a = placeShip(4, a)
+	a = placeShip(3, a)
+	a = placeShip(3, a)
+	a = placeShip(2, a)
+	return a
+}
+
+func placeShip(size int, bo battleShipBoard) battleShipBoard {
+
+	for {
+		board := bo
+		sideways := rand.Int() % 2
+
+		if sideways == 0 { // ship goes up
+			X := rand.Int() % 10
+			Y := rand.Int() % 10
+			if Y+size > 10 {
+				continue
+			}
+
+			for y := Y; y < Y+size; y++ {
+				if board.Board[y][X] != stateEmpty {
+					continue
+				}
+				board.Board[y][X] = stateShip
+			}
+			bo = board
+			break
+		} else {
+			X := rand.Int() % 10
+			Y := rand.Int() % 10
+
+			if X+size > 10 {
+				continue
+			}
+
+			for x := X; x < X+size; x++ {
+				if board.Board[Y][x] != stateEmpty {
+					continue
+				}
+				board.Board[Y][x] = stateShip
+			}
+			bo = board
+			break
+		}
+	}
+
+	return bo
 }

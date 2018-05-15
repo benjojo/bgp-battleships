@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/binary"
 	"flag"
 	"fmt"
@@ -12,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/nareix/bits"
+	"github.com/bamiaux/iobit"
 )
 
 type bgpCommunity struct {
@@ -58,13 +57,13 @@ S = Hit or Miss on last move
 +-------------------------------+
 */
 
-func numberToBitReader(in uint16) *bits.Reader {
+func numberToBitReader(in uint16) iobit.Reader {
 	actually := uint16(in)
 
 	bits2 := make([]byte, 2)
 
-	binary.LittleEndian.PutUint16(bits2, actually)
-	return &bits.Reader{R: bytes.NewReader(bits2)}
+	binary.BigEndian.PutUint16(bits2, actually)
+	return iobit.NewReader(bits2)
 }
 
 var errNotEnoughData = fmt.Errorf("Not enough data to make a move")
@@ -80,7 +79,7 @@ func readBGP() (gameIncrementor, X, Y, HitOrMissOnLast int, err error) {
 		if community.AS == uint16(*communityAS) {
 			// okay, so we are now interested!
 			r := numberToBitReader(community.Data)
-			t, _ := r.ReadBits(2)
+			t := r.Uint8(2)
 
 			if t == 1 {
 				// Counter
@@ -89,7 +88,7 @@ func readBGP() (gameIncrementor, X, Y, HitOrMissOnLast int, err error) {
 					return 0, 0, 0, 0, errDupeType
 				}
 				readCounter = true
-				c, _ := r.ReadBits(14)
+				c := r.Uint16(14)
 				gameIncrementor = int(c)
 
 			} else if t == 2 {
@@ -98,11 +97,11 @@ func readBGP() (gameIncrementor, X, Y, HitOrMissOnLast int, err error) {
 					return 0, 0, 0, 0, errDupeType
 				}
 				readPosition = true
-				xp, _ := r.ReadBits(4)
+				xp := r.Uint16(4)
 				X = int(xp)
-				yp, _ := r.ReadBits(4)
+				yp := r.Uint16(4)
 				Y = int(yp)
-				hs, _ := r.ReadBits(1)
+				hs := r.Uint16(1)
 				HitOrMissOnLast = int(hs)
 
 			} else {
@@ -120,34 +119,32 @@ func readBGP() (gameIncrementor, X, Y, HitOrMissOnLast int, err error) {
 func writeBGP(gameIncrementor, X, Y, HitOrMissOnLast int) error {
 
 	counternumberbytes := make([]byte, 2)
-	counternumberbytesbuffer := bytes.NewBuffer(counternumberbytes)
-	counternumberbits := bits.Writer{
-		W: counternumberbytesbuffer,
-	}
+	counternumberbits := iobit.NewWriter(counternumberbytes)
 
-	counternumberbits.WriteBits(1, 2)
-	counternumberbits.WriteBits(uint(gameIncrementor), 14)
+	counternumberbits.PutUint16(2, 0x1)
+	counternumberbits.PutUint16(14, uint16(gameIncrementor))
+	counternumberbits.Flush()
 
-	counterCommunity := binary.LittleEndian.Uint16(counternumberbytes)
+	counterCommunity := binary.BigEndian.Uint16(counternumberbytes)
 
 	positionnumberbytes := make([]byte, 2)
-	positionnumberbytesbuffer := bytes.NewBuffer(positionnumberbytes)
-	positionnumberbits := bits.Writer{
-		W: positionnumberbytesbuffer,
-	}
+	positionnumberbits := iobit.NewWriter(positionnumberbytes)
 
-	positionnumberbits.WriteBits(2, 2)
-	positionnumberbits.WriteBits(uint(X), 4)
-	positionnumberbits.WriteBits(uint(Y), 4)
-	positionnumberbits.WriteBits(uint(HitOrMissOnLast), 1)
+	positionnumberbits.PutUint16(2, 0x2)
+	positionnumberbits.PutUint16(4, uint16(X))
+	positionnumberbits.PutUint16(4, uint16(Y))
+	positionnumberbits.PutBit(HitOrMissOnLast == 1)
+	positionnumberbits.Flush()
 
-	positionCommunity := binary.LittleEndian.Uint16(positionnumberbytes)
+	fmt.Printf("%x/%x", counternumberbytes, positionnumberbytes)
+
+	positionCommunity := binary.BigEndian.Uint16(positionnumberbytes)
 
 	// Now we have the two community strings counterCommunity and positionCommunity
 
 	templatestring := fmt.Sprintf(
 		"\nbgp_community.add((%d,%d));\nbgp_community.add((%d,%d));\n",
-		communityAS, positionCommunity, communityAS, counterCommunity)
+		*communityAS, positionCommunity, *communityAS, counterCommunity)
 
 	templateBytes, err := ioutil.ReadFile(*templatePath)
 	if err != nil {
@@ -170,7 +167,7 @@ func writeBGP(gameIncrementor, X, Y, HitOrMissOnLast int) error {
 
 	defer conn.Close()
 
-	conn.Write([]byte(fmt.Sprintf("reload all\n")))
+	conn.Write([]byte(fmt.Sprintf("configure\n")))
 
 	buffer := make([]byte, 90000)
 	_, err = conn.Read(buffer)

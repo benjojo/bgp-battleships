@@ -6,35 +6,88 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 )
 
 func main() {
+	startfirst := flag.Bool("startfirst", false, "set this if you are starting first")
 	flag.Parse()
 	log.Printf("yup")
 
-	LocalB := battleShipBoard{}
-	// RemoteB := battleShipBoard{}
-
-	LocalB.Board[1][5] = stateShip
-	LocalB.Board[1][2] = stateHit
-	LocalB.Board[2][2] = stateAttempt
+	LocalB := makeBoard()
+	RemoteB := battleShipBoard{}
 
 	LocalB.Draw()
 
+	gameCounter := 0
+	hitmiss := 0
+
+	fmt.Print("Your Side                   Player Two\n")
+	fmt.Print(combineBoard(LocalB, RemoteB))
+
 	reader := bufio.NewReader(os.Stdin)
 	for {
-		fmt.Print("Next Move> ")
-		text, _ := reader.ReadString('\n')
-		if len(text) != 3 {
-			log.Printf("wrong length of command %d", len(text))
-			continue
+		var text string
+		var x, y int
+		if *startfirst {
+			fmt.Printf("[%06d] Next Move> ", gameCounter)
+			text, _ = reader.ReadString('\n')
+			if len(text) != 3 {
+				log.Printf("wrong length of command %d", len(text))
+				continue
+			}
+			x, y = cordsToNumbers(text)
+			if x == -1 || y == -1 {
+				continue
+			}
+
+			fmt.Printf("Firing on %s...", text)
+			writeBGP(gameCounter, x, y, hitmiss)
 		}
-		x, y := cordsToNumbers(text)
-		if x == -1 || y == -1 {
-			continue
+
+		*startfirst = true
+
+		fmt.Printf("waiting on players responce...\n")
+
+		for {
+			time.Sleep(time.Second)
+			var err error
+			var nx, ny int
+			tempgameCounter := 0
+			tempgameCounter, nx, ny, hitmiss, err = readBGP()
+			if err != nil {
+				fmt.Print(".")
+				continue
+			}
+			fmt.Print("!")
+
+			if tempgameCounter > gameCounter {
+				gameCounter = tempgameCounter + 1
+				// !! New move has happened
+
+				// First, process if we got a hit or not.
+				if hitmiss == 1 {
+					RemoteB.Board[y][x] = stateHit
+					log.Printf("It's a Hit!")
+				} else {
+					RemoteB.Board[y][x] = stateAttempt
+					log.Printf("It's a Miss!")
+				}
+
+				// Now... did we get hit?
+				if LocalB.Board[ny][nx] == stateShip {
+					hitmiss = 1
+					LocalB.Board[ny][nx] = stateHit
+				} else {
+					hitmiss = 0
+					LocalB.Board[ny][nx] = stateAttempt
+				}
+				break
+			}
 		}
-		LocalB.Board[y][x] = stateHit
-		LocalB.Draw()
+
+		fmt.Print("Your Side                   Player Two\n")
+		fmt.Print(combineBoard(LocalB, RemoteB))
 	}
 
 }
