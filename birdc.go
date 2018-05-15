@@ -5,11 +5,14 @@ import (
 	"encoding/binary"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/nareix/bits"
 )
 
 type bgpCommunity struct {
@@ -24,6 +27,9 @@ var monitoredPrefix = flag.String(
 
 var communityAS = flag.Int("communityASN", 23456,
 	"The shared community AS used to communicate on")
+
+var templatePath = flag.String("templateFile", "/etc/bird/conf.orig",
+	"Where to find the template file")
 
 /*
 Three Communities are used:
@@ -52,32 +58,124 @@ S = Hit or Miss on last move
 +-------------------------------+
 */
 
-func numberToByteReader(in uint16) *bytes.Reader {
+func numberToBitReader(in uint16) *bits.Reader {
 	actually := uint16(in)
 
-	bits := make([]byte, 2)
+	bits2 := make([]byte, 2)
 
-	binary.LittleEndian.PutUint16(bits, actually)
-	return bytes.NewReader(bits)
+	binary.LittleEndian.PutUint16(bits2, actually)
+	return &bits.Reader{R: bytes.NewReader(bits2)}
 }
 
 var errNotEnoughData = fmt.Errorf("Not enough data to make a move")
+var errInvalidType = fmt.Errorf("Invalid community type found")
+var errDupeType = fmt.Errorf("Duplicate data read")
 
 func readBGP() (gameIncrementor, X, Y, HitOrMissOnLast int, err error) {
 	communities := readCommunities(*monitoredPrefix)
 
-	readbits := 0
+	readCounter, readPosition := false, false
 
 	for _, community := range communities {
 		if community.AS == uint16(*communityAS) {
 			// okay, so we are now interested!
+			r := numberToBitReader(community.Data)
+			t, _ := r.ReadBits(2)
 
+			if t == 1 {
+				// Counter
+				if readCounter {
+					// uh we have read it twice, oh dear?
+					return 0, 0, 0, 0, errDupeType
+				}
+				readCounter = true
+				c, _ := r.ReadBits(14)
+				gameIncrementor = int(c)
+
+			} else if t == 2 {
+				if readPosition {
+					// uh we have read it twice, oh dear?
+					return 0, 0, 0, 0, errDupeType
+				}
+				readPosition = true
+				xp, _ := r.ReadBits(4)
+				X = int(xp)
+				yp, _ := r.ReadBits(4)
+				Y = int(yp)
+				hs, _ := r.ReadBits(1)
+				HitOrMissOnLast = int(hs)
+
+			} else {
+				return 0, 0, 0, 0, errInvalidType
+			}
 		}
 	}
 
-	// bits.Reader{}
+	if readCounter && readPosition {
+		return gameIncrementor, X, Y, HitOrMissOnLast, nil
+	}
+	return 0, 0, 0, 0, errNotEnoughData
+}
 
-	return 0, 0, 0, 0
+func writeBGP(gameIncrementor, X, Y, HitOrMissOnLast int) error {
+
+	counternumberbytes := make([]byte, 2)
+	counternumberbytesbuffer := bytes.NewBuffer(counternumberbytes)
+	counternumberbits := bits.Writer{
+		W: counternumberbytesbuffer,
+	}
+
+	counternumberbits.WriteBits(1, 2)
+	counternumberbits.WriteBits(uint(gameIncrementor), 14)
+
+	counterCommunity := binary.LittleEndian.Uint16(counternumberbytes)
+
+	positionnumberbytes := make([]byte, 2)
+	positionnumberbytesbuffer := bytes.NewBuffer(positionnumberbytes)
+	positionnumberbits := bits.Writer{
+		W: positionnumberbytesbuffer,
+	}
+
+	positionnumberbits.WriteBits(2, 2)
+	positionnumberbits.WriteBits(uint(X), 4)
+	positionnumberbits.WriteBits(uint(Y), 4)
+	positionnumberbits.WriteBits(uint(HitOrMissOnLast), 1)
+
+	positionCommunity := binary.LittleEndian.Uint16(positionnumberbytes)
+
+	// Now we have the two community strings counterCommunity and positionCommunity
+
+	templatestring := fmt.Sprintf(
+		"\nbgp_community.add((%d,%d));\nbgp_community.add((%d,%d));\n",
+		communityAS, positionCommunity, communityAS, counterCommunity)
+
+	templateBytes, err := ioutil.ReadFile(*templatePath)
+	if err != nil {
+		return err
+	}
+
+	birdConfigOutput := strings.Replace(string(templateBytes),
+		"###COMMUNITY###", templatestring, 1)
+
+	err = ioutil.WriteFile("/etc/bird/bird.conf", []byte(birdConfigOutput), 0640)
+	if err != nil {
+		return err
+	}
+
+	// now reload bird
+	conn, err := net.Dial("unix", "/run/bird/bird.ctl")
+	if err != nil {
+		log.Fatalf("Unable to connect to bird %s", err.Error())
+	}
+
+	defer conn.Close()
+
+	conn.Write([]byte(fmt.Sprintf("reload all\n")))
+
+	buffer := make([]byte, 90000)
+	_, err = conn.Read(buffer)
+
+	return err
 }
 
 func readCommunities(prefix string) (o []bgpCommunity) {

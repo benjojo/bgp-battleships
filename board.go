@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/mgutz/ansi"
 )
@@ -52,4 +54,25 @@ func (b boardState) Draw() string {
 		return cattempt + square + ansi.DefaultBG + ansi.DefaultFG
 	}
 	return ""
+}
+
+func cordsToNumbers(in string) (X, Y int) {
+	in = strings.ToLower(in)
+
+	i1 := int(in[0])
+	if i1 > 96 && i1 < 107 {
+		X = i1 - 97
+	} else {
+		return -1, -1
+	}
+
+	i2, err := strconv.ParseInt(string(in[1]), 10, 64)
+	if err != nil {
+		return -1, -1
+	}
+
+	if i2 < 11 {
+		return X, int(i2)
+	}
+	return -1, -1
 }
