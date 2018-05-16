@@ -99,9 +99,10 @@ func readBGP() (gameIncrementor, X, Y, HitOrMissOnLast int, err error) {
 				readPosition = true
 				xp := r.Uint16(4)
 				X = int(xp)
+				r.Skip(2)
 				yp := r.Uint16(4)
 				Y = int(yp)
-				hs := r.Uint16(1)
+				hs := r.Uint16(2)
 				HitOrMissOnLast = int(hs)
 
 			} else {
@@ -116,8 +117,34 @@ func readBGP() (gameIncrementor, X, Y, HitOrMissOnLast int, err error) {
 	return 0, 0, 0, 0, errNotEnoughData
 }
 
-func writeBGP(gameIncrementor, X, Y, HitOrMissOnLast int) error {
+func testBGPCode() {
+	for x := 0; x < 10; x++ {
+		for y := 0; y < 10; y++ {
+			_, c2 := genCommunutiies(1, x, y, 0)
 
+			r := numberToBitReader(c2)
+			t := r.Uint8(2)
+			if t != 2 {
+				log.Printf("WTF??")
+			}
+			xp := r.Uint16(4)
+			X := int(xp)
+			r.Skip(2)
+			yp := r.Uint16(4)
+			Y := int(yp)
+			// hs := r.Uint16(2)
+			if X != x {
+				fmt.Printf("Logic error X: Got %d != Sent %d\n", X, x)
+			}
+
+			if Y != y {
+				fmt.Printf("Logic error Y: Got %d != Sent %d\n", Y, y)
+			}
+		}
+	}
+}
+
+func genCommunutiies(gameIncrementor, X, Y, HitOrMissOnLast int) (uint16, uint16) {
 	counternumberbytes := make([]byte, 2)
 	counternumberbits := iobit.NewWriter(counternumberbytes)
 
@@ -132,13 +159,21 @@ func writeBGP(gameIncrementor, X, Y, HitOrMissOnLast int) error {
 
 	positionnumberbits.PutUint16(2, 2)
 	positionnumberbits.PutUint16(4, uint16(X))
+	positionnumberbits.PutUint16(2, 0) // pad
 	positionnumberbits.PutUint16(4, uint16(Y))
-	positionnumberbits.PutBit(HitOrMissOnLast == 1)
+	positionnumberbits.PutUint16(2, uint16(HitOrMissOnLast))
+	positionnumberbits.PutUint16(2, 0) // pad
 	positionnumberbits.Flush()
 
 	fmt.Printf("%x/%x", counternumberbytes, positionnumberbytes)
 
 	positionCommunity := binary.BigEndian.Uint16(positionnumberbytes)
+	return counterCommunity, positionCommunity
+}
+
+func writeBGP(gameIncrementor, X, Y, HitOrMissOnLast int) error {
+	counterCommunity, positionCommunity :=
+		genCommunutiies(gameIncrementor, X, Y, HitOrMissOnLast)
 
 	// Now we have the two community strings counterCommunity and positionCommunity
 
@@ -164,12 +199,45 @@ func writeBGP(gameIncrementor, X, Y, HitOrMissOnLast int) error {
 	if err != nil {
 		log.Fatalf("Unable to connect to bird %s", err.Error())
 	}
-
+	buffer := make([]byte, 90000)
+	conn.Read(buffer)
 	defer conn.Close()
 
 	conn.Write([]byte(fmt.Sprintf("configure\n")))
 
+	buffer = make([]byte, 90000)
+	_, err = conn.Read(buffer)
+
+	return err
+}
+
+func resetBird() error {
+
+	templateBytes, err := ioutil.ReadFile(*templatePath)
+	if err != nil {
+		return err
+	}
+
+	birdConfigOutput := strings.Replace(string(templateBytes),
+		"###COMMUNITY###", "", 1)
+
+	err = ioutil.WriteFile("/etc/bird/bird.conf", []byte(birdConfigOutput), 0640)
+	if err != nil {
+		return err
+	}
+
+	// now reload bird
+	conn, err := net.Dial("unix", "/run/bird/bird.ctl")
+	if err != nil {
+		log.Fatalf("Unable to connect to bird %s", err.Error())
+	}
 	buffer := make([]byte, 90000)
+	conn.Read(buffer)
+	defer conn.Close()
+
+	conn.Write([]byte(fmt.Sprintf("configure\n")))
+
+	buffer = make([]byte, 90000)
 	_, err = conn.Read(buffer)
 
 	return err

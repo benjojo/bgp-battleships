@@ -11,7 +11,16 @@ import (
 
 func main() {
 	startfirst := flag.Bool("startfirst", false, "set this if you are starting first")
+	resetPls := flag.Bool("reset", false, "reset bird")
 	flag.Parse()
+
+	if *resetPls {
+		resetBird()
+		os.Exit(0)
+	}
+
+	log.Printf("Running self test")
+	testBGPCode()
 	log.Printf("yup")
 
 	LocalB := makeBoard()
@@ -20,6 +29,7 @@ func main() {
 	LocalB.Draw()
 
 	gameCounter := 0
+	firstPlay := true
 	hitmiss := 0
 
 	fmt.Print("Your Side                   Player Two\n")
@@ -43,6 +53,7 @@ func main() {
 
 			fmt.Printf("Firing on %s...", text)
 			writeBGP(gameCounter, x, y, hitmiss)
+			firstPlay = false
 		}
 
 		*startfirst = true
@@ -56,34 +67,38 @@ func main() {
 			tempgameCounter := 0
 			tempgameCounter, nx, ny, hitmiss, err = readBGP()
 			if err != nil {
-				fmt.Print(".")
+				fmt.Print("E")
 				continue
 			}
-			fmt.Print("!")
+			fmt.Print(".")
 
 			if tempgameCounter > gameCounter || gameCounter == 0 {
 				gameCounter = tempgameCounter + 1
 				// !! New move has happened
+				log.Printf("The other side played a %s%d", string(byte("A"[0])+byte(nx)), ny)
 
 				// First, process if we got a hit or not.
-				if hitmiss == 1 {
-					RemoteB.Board[y][x] = stateHit
-					log.Printf("It's a Hit!")
-				} else {
-					RemoteB.Board[y][x] = stateAttempt
-					log.Printf("It's a Miss!")
+
+				if !(firstPlay && *startfirst) {
+					if hitmiss == 1 {
+						RemoteB.Board[y][x] = stateHit
+						log.Printf("It's a Hit!")
+					} else {
+						RemoteB.Board[y][x] = stateAttempt
+						log.Printf("It's a Miss!")
+					}
+
 				}
 
-				if !(tempgameCounter == 1 && *startfirst) {
-					// Now... did we get hit?
-					if LocalB.Board[ny][nx] == stateShip {
-						hitmiss = 1
-						LocalB.Board[ny][nx] = stateHit
-					} else {
-						hitmiss = 0
-						LocalB.Board[ny][nx] = stateAttempt
-					}
+				// Now... did we get hit?
+				if LocalB.Board[ny][nx] == stateShip {
+					hitmiss = 1
+					LocalB.Board[ny][nx] = stateHit
+				} else {
+					hitmiss = 0
+					LocalB.Board[ny][nx] = stateAttempt
 				}
+
 				break
 			}
 		}
