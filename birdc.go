@@ -53,7 +53,7 @@ Y = Y Cords
 S = Hit or Miss on last move
 
 +-------------------------------+
-|T|T|X|X|X|X|Y|Y|Y|Y|S|-|-|-|-|-|
+|T|T|X|X|X|X|-|-|Y|Y|Y|Y|S|S|-|-|
 +-------------------------------+
 */
 
@@ -164,8 +164,6 @@ func genCommunutiies(gameIncrementor, X, Y, HitOrMissOnLast int) (uint16, uint16
 	positionnumberbits.PutUint16(2, uint16(HitOrMissOnLast))
 	positionnumberbits.PutUint16(2, 0) // pad
 	positionnumberbits.Flush()
-
-	fmt.Printf("%x/%x", counternumberbytes, positionnumberbytes)
 
 	positionCommunity := binary.BigEndian.Uint16(positionnumberbytes)
 	return counterCommunity, positionCommunity
@@ -279,7 +277,5 @@ func readCommunities(prefix string) (o []bgpCommunity) {
 		}
 	}
 
-	// log.Print(string(buffer))
-	// log.Printf("%+v", matches)
 	return o
 }
