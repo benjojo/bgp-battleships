@@ -58,7 +58,7 @@ func main() {
 
 		*startfirst = true
 
-		fmt.Printf("waiting on players responce...\n")
+		fmt.Printf("waiting on players response...\n")
 
 		for {
 			time.Sleep(time.Second)
