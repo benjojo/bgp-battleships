@@ -120,7 +120,7 @@ func readBGP() (gameIncrementor, X, Y, HitOrMissOnLast int, err error) {
 func testBGPCode() {
 	for x := 0; x < 10; x++ {
 		for y := 0; y < 10; y++ {
-			_, c2 := genCommunutiies(1, x, y, 0)
+			_, c2 := genCommunities(1, x, y, 0)
 
 			r := numberToBitReader(c2)
 			t := r.Uint8(2)
@@ -144,7 +144,7 @@ func testBGPCode() {
 	}
 }
 
-func genCommunutiies(gameIncrementor, X, Y, HitOrMissOnLast int) (uint16, uint16) {
+func genCommunities(gameIncrementor, X, Y, HitOrMissOnLast int) (uint16, uint16) {
 	counternumberbytes := make([]byte, 2)
 	counternumberbits := iobit.NewWriter(counternumberbytes)
 
@@ -171,7 +171,7 @@ func genCommunutiies(gameIncrementor, X, Y, HitOrMissOnLast int) (uint16, uint16
 
 func writeBGP(gameIncrementor, X, Y, HitOrMissOnLast int) error {
 	counterCommunity, positionCommunity :=
-		genCommunutiies(gameIncrementor, X, Y, HitOrMissOnLast)
+		genCommunities(gameIncrementor, X, Y, HitOrMissOnLast)
 
 	// Now we have the two community strings counterCommunity and positionCommunity
 
